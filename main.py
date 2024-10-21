@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 
 # Dossier de base pour les fichiers téléchargés
-output_folder = "downloaded_site_13"
+output_folder = "template_hotel_luxury_journey"
 
 # Crée les dossiers s'ils n'existent pas
 os.makedirs(output_folder, exist_ok=True)
@@ -103,5 +103,5 @@ def get_filename_from_url(url):
 
 # Exemple d'utilisation
 if __name__ == "__main__":
-    url_to_scrape = "https://zrtechsolutions.com/demo/html/indisoft/index.html"  # Remplacez par l'URL à scraper
+    url_to_scrape = input("Entrer le lien du template a telecharger === ") 
     scrape_files(url_to_scrape, output_folder)

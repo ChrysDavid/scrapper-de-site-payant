@@ -103,5 +103,92 @@ def get_filename_from_url(url):
 
 # Exemple d'utilisation
 if __name__ == "__main__":
-    url_to_scrape = input("Entrer le lien du template a telecharger === ") 
+    url_to_scrape = "Enter ici le lien du template"
     scrape_files(url_to_scrape, output_folder)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# import os
+# import requests
+# from bs4 import BeautifulSoup
+# from urllib.parse import urljoin, urlparse
+
+# # Dossier pour enregistrer les fichiers téléchargés
+# output_folder = "downloaded_files"
+# if not os.path.exists(output_folder):
+#     os.makedirs(output_folder)
+
+# # Fonction pour télécharger et enregistrer un fichier
+# def download_file(url, folder, filename=None):
+#     try:
+#         response = requests.get(url)
+#         if response.status_code == 200:
+#             if not filename:
+#                 filename = os.path.basename(urlparse(url).path) or "index.html"
+#             filepath = os.path.join(folder, filename)
+#             with open(filepath, 'wb') as f:
+#                 f.write(response.content)
+#             print(f"Downloaded: {url}")
+#         else:
+#             print(f"Failed to download {url}")
+#     except Exception as e:
+#         print(f"Error downloading {url}: {e}")
+
+# # Fonction pour extraire les liens des fichiers HTML, CSS, JS et SRC (images, scripts)
+# def scrape_files(url):
+#     try:
+#         # Téléchargement de la page HTML principale
+#         response = requests.get(url)
+#         if response.status_code == 200:
+#             # Sauvegarder le fichier HTML
+#             download_file(url, output_folder, "page.html")
+
+#             # Analyser le contenu HTML
+#             soup = BeautifulSoup(response.text, 'html.parser')
+
+#             # Extraction des fichiers CSS
+#             for link in soup.find_all('link', rel='stylesheet'):
+#                 css_url = urljoin(url, link['href'])
+#                 download_file(css_url, output_folder)
+
+#             # Extraction des fichiers JS
+#             for script in soup.find_all('script', src=True):
+#                 js_url = urljoin(url, script['src'])
+#                 download_file(js_url, output_folder)
+
+#             # Extraction des fichiers SRC (images, vidéos, etc.)
+#             for img in soup.find_all('img', src=True):
+#                 img_url = urljoin(url, img['src'])
+#                 download_file(img_url, output_folder)
+
+#             # Extraction des fichiers dans les attributs 'src' (par exemple, <video>, <audio>)
+#             for media in soup.find_all(['video', 'audio'], src=True):
+#                 media_url = urljoin(url, media['src'])
+#                 download_file(media_url, output_folder)
+
+#             print("Scraping terminé.")
+#         else:
+#             print(f"Erreur: Impossible de récupérer la page. Status code {response.status_code}")
+#     except Exception as e:
+#         print(f"Erreur lors du scraping : {e}")
+
+# # Exemple d'utilisation
+# if __name__ == "__main__":
+#     url_to_scrape = "https://example.com"  # Remplacez par l'URL à scraper
+#     scrape_files(url_to_scrape)

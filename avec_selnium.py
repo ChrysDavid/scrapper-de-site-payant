@@ -1,6 +1,9 @@
-from selenium import webdriver
+from selenium import webdriver 
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 import os
@@ -20,6 +23,8 @@ class WebScraper:
         self.css_folder = os.path.join(output_folder, "css")
         self.js_folder = os.path.join(output_folder, "js")
         self.images_folder = os.path.join(output_folder, "images")
+        self.visited_urls = set()  # Pour suivre les pages déjà visitées
+        self.base_domain = ""  # Pour limiter le scraping à un domaine
         self.create_folders()
         self.session = self.create_session()
         
@@ -28,9 +33,6 @@ class WebScraper:
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--ignore-certificate-errors")
         chrome_options.add_argument("--ignore-ssl-errors")
-        chrome_options.add_argument("--allow-insecure-localhost")
-        chrome_options.add_argument("--disable-web-security")
-        chrome_options.add_argument("--allow-running-insecure-content")
         
         from chromedriver_py import binary_path
         service = Service(binary_path)
@@ -39,22 +41,15 @@ class WebScraper:
     def create_session(self):
         """Crée une session requests configurée avec retry et SSL"""
         session = requests.Session()
-        
-        # Configuration des retries
         retry_strategy = Retry(
             total=3,
             backoff_factor=1,
             status_forcelist=[429, 500, 502, 503, 504],
         )
-        
-        # Configuration de l'adaptateur avec SSL vérifié
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("https://", adapter)
         session.mount("http://", adapter)
-        
-        # Configuration du contexte SSL
         session.verify = certifi.where()
-        
         return session
 
     def create_folders(self):
@@ -73,18 +68,14 @@ class WebScraper:
     def download_external_file(self, url, folder):
         """Télécharge un fichier externe avec gestion des erreurs améliorée"""
         try:
-            # Ajout d'un User-Agent
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            
             response = self.session.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             
             parsed_url = urlparse(url)
             file_name = os.path.basename(parsed_url.path)
-            
-            # Gestion améliorée des types de fichiers
             if not file_name or '.' not in file_name:
                 content_type = response.headers.get('content-type', '').lower()
                 if 'javascript' in content_type:
@@ -99,8 +90,6 @@ class WebScraper:
                     return None
             
             local_path = os.path.join(folder, file_name)
-            
-            # Vérification si le fichier existe déjà
             if not os.path.exists(local_path):
                 with open(local_path, 'wb') as f:
                     f.write(response.content)
@@ -112,20 +101,11 @@ class WebScraper:
             
         except requests.exceptions.SSLError as e:
             print(f"Erreur SSL lors du téléchargement de {url}: {e}")
-            # Tentative sans vérification SSL en dernier recours
-            try:
-                response = self.session.get(url, headers=headers, verify=False, timeout=10)
-                # ... (même logique que précédemment)
-            except Exception as e:
-                print(f"Échec du téléchargement même sans SSL pour {url}: {e}")
-                return None
-                
         except requests.exceptions.RequestException as e:
             print(f"Erreur lors du téléchargement de {url}: {e}")
-            return None
         except Exception as e:
             print(f"Erreur inattendue lors du téléchargement de {url}: {e}")
-            return None
+        return None
 
     def extract_inline_styles(self, soup):
         """Extrait les styles CSS inline"""
@@ -161,7 +141,6 @@ class WebScraper:
 
     def process_external_resources(self, soup, base_url):
         """Traite les ressources externes"""
-        # CSS externe
         for link in soup.find_all('link', href=True):
             if link['href'].endswith('.css'):
                 css_url = urljoin(base_url, link['href'])
@@ -169,30 +148,30 @@ class WebScraper:
                 if local_path:
                     link['href'] = local_path
 
-        # JavaScript externe
         for script in soup.find_all('script', src=True):
             js_url = urljoin(base_url, script['src'])
             local_path = self.download_external_file(js_url, self.js_folder)
             if local_path:
                 script['src'] = local_path
 
-        # Images
         for img in soup.find_all('img', src=True):
             img_url = urljoin(base_url, img['src'])
             local_path = self.download_external_file(img_url, self.images_folder)
             if local_path:
                 img['src'] = local_path
 
-    def scrape(self, url):
-        """Fonction principale de scraping"""
+    def scrape_page(self, url):
+        """Scrape une page et enregistre son contenu"""
         try:
+            if url in self.visited_urls:
+                print(f"Page déjà visitée : {url}")
+                return
+
             print(f"Démarrage du scraping de {url}...")
-            
-            # Désactiver les avertissements SSL pour requests
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            
+            self.visited_urls.add(url)
+
             self.driver.get(url)
-            time.sleep(5)  # Augmentation du temps d'attente
+            WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
             
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             
@@ -205,20 +184,42 @@ class WebScraper:
             print("Traitement des ressources externes...")
             self.process_external_resources(soup, url)
             
-            html_path = os.path.join(self.output_folder, "index.html")
+            parsed_url = urlparse(url)
+            page_name = "index.html" if parsed_url.path == "/" else parsed_url.path.strip("/").replace("/", "_") + ".html"
+            html_path = os.path.join(self.output_folder, page_name)
+            
             with open(html_path, 'w', encoding='utf-8') as f:
                 f.write(soup.prettify())
             
-            print("Scraping terminé avec succès!")
-            return True
+            print(f"Page {url} sauvegardée avec succès!")
+            
+            # Suivre les liens internes
+            for link in soup.find_all('a', href=True):
+                next_url = urljoin(url, link['href'])
+                if self.is_internal_link(next_url):
+                    self.scrape_page(next_url)
             
         except Exception as e:
-            print(f"Erreur lors du scraping: {e}")
-            return False
-            
-        finally:
-            self.driver.quit()
+            print(f"Erreur lors du scraping de {url}: {e}")
 
-if __name__ == "__main__":
-    scraper = WebScraper("website_files_2")
-    scraper.scrape("https://phenix-bat-tech.com/")
+    def is_internal_link(self, url):
+        """Vérifie si le lien est interne au domaine principal"""
+        parsed_url = urlparse(url)
+        return parsed_url.netloc == self.base_domain
+
+    def start_scraping(self, start_url):
+        """Lance le scraping à partir de l'URL de départ"""
+        self.base_domain = urlparse(start_url).netloc
+        self.scrape_page(start_url)
+
+    def close(self):
+        """Ferme le navigateur et nettoie les ressources"""
+        self.driver.quit()
+
+# Utilisation du scraper
+output_folder = "site_content"
+scraper = WebScraper(output_folder)
+
+start_url = "https://phenix-bat-tech.com/"  # URL de départ du site web à scraper
+scraper.start_scraping(start_url)
+scraper.close()
